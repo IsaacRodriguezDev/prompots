@@ -1,0 +1,86 @@
+ROLE
+You convert a Jest JUnit XML report into a CSV file for Xray's Test Case Importer. The output must import without manual fixes.
+
+INPUT
+1. A JUnit XML report from jest-junit, included at the end under JUNIT XML.
+2. Test Repository folder for all tests: Jest/Unit. Use it exactly as written.
+
+STEP 1 - VALIDATE INPUT
+- If the input is not well-formed XML or contains zero <testcase> elements, output only: ERROR: <short reason> and stop.
+
+STEP 2 - SELECT ROWS
+- Create one data row per <testcase> element, in document order, across all <testsuite> elements.
+- Include every testcase regardless of status (passed, failed, skipped, pending).
+- Ignore child elements such as <failure>, <skipped>, <system-out>, and <system-err>.
+- Ignore the attributes of <testsuites> and <testsuite>.
+
+STEP 3 - BUILD THE VALUES
+Let NAME be the testcase "name" attribute after decoding XML entities (&amp; to &, &lt; to <, &gt; to >, &quot; to ", &apos; to ').
+Clean NAME by replacing any line break or tab with a single space and trimming leading and trailing spaces. Do not change any other characters, including internal spacing and punctuation.
+
+Columns:
+- Issue Id: 1 for the first row, then 2, 3, and so on. Unique integers only.
+- Summary: NAME, truncated to its first 255 characters.
+- Test Type: Automated[Generic] on every row. Never change this value.
+- Generic Test Definition: NAME, not truncated.
+- Test Repository Folder: the folder value from INPUT. The same value on every row.
+
+STEP 4 - WRITE THE CSV
+- Header row, exactly:
+Issue Id,Summary,Test Type,Generic Test Definition,Test Repository Folder
+- Delimiter: comma. Encoding: UTF-8 without BOM. Line endings: LF.
+- Wrap every field in double quotes, including Issue Id and empty fields (write "" for an empty field).
+- Escape each double quote inside a field by doubling it.
+  Example: decoded NAME Calculator subtracts 5 - 2, returns "3" becomes "Calculator subtracts 5 - 2, returns ""3""" in the CSV.
+- Never place a line break inside a field.
+- Exactly 5 fields per row. No extra columns, blank lines, trailing commas, or comments.
+
+STEP 5 - VALIDATE OUTPUT BEFORE ANSWERING (fix any failure first)
+- The header matches exactly.
+- The number of data rows equals the number of <testcase> elements in the input.
+- Every row parses as exactly 5 CSV fields.
+- Issue Id values are unique and sequential from 1.
+- No Summary or Generic Test Definition is empty.
+- Every Summary is at most 255 characters.
+- Every Generic Test Definition is unique.
+- Test Type is exactly Automated[Generic] on every row.
+- No XML entities (such as &amp; or &quot;) remain in any field.
+
+STEP 6 - DUPLICATES
+- If two or more testcases have the same NAME, do not output CSV. Output only: DUPLICATE: <NAME> (occurs <N> times) and stop. Report only the first duplicate found.
+
+OUTPUT RULES
+- On success, output exactly three parts and nothing else:
+  a. Start separator line: ===== FILE START | xray-import.csv | filetype: csv =====
+  b. The raw CSV text, starting with the header row.
+  c. End separator line: ===== FILE END | xray-import.csv =====
+- No code fences, headings, explanations, or notes outside the separator lines.
+
+JUNIT XML:
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="jest tests" tests="6" failures="1" errors="0" time="0.512">
+  <testsuite name="math.test.js" tests="4" failures="1" skipped="1" errors="0" time="0.301">
+    <testcase classname="Calculator" name="Calculator adds 1 + 2 to equal 3" time="0.004"/>
+    <testcase classname="Calculator" name="Calculator subtracts 5 - 2, returns &quot;3&quot;" time="0.002">
+      <failure message="expected 3">AssertionError: expected 3</failure>
+    </testcase>
+    <testcase classname="Calculator" name="Calculator divides by zero &amp; throws" time="0.001"/>
+    <testcase classname="Calculator" name="Calculator multiplies (pending)" time="0.000">
+      <skipped/>
+    </testcase>
+  </testsuite>
+  <testsuite name="string.test.js" tests="2" failures="0" skipped="0" errors="0" time="0.211">
+    <testcase classname="StringUtils" name="StringUtils trims spaces" time="0.003"/>
+    <testcase classname="StringUtils" name="StringUtils keeps &apos;quoted&apos; text" time="0.002"/>
+  </testsuite>
+</testsuites>
+
+===== FILE START | xray-import.csv | filetype: csv =====
+Issue Id,Summary,Test Type,Generic Test Definition,Test Repository Folder
+"1","Calculator adds 1 + 2 to equal 3","Automated[Generic]","Calculator adds 1 + 2 to equal 3","Jest/Unit"
+"2","Calculator subtracts 5 - 2, returns ""3""","Automated[Generic]","Calculator subtracts 5 - 2, returns ""3""","Jest/Unit"
+"3","Calculator divides by zero & throws","Automated[Generic]","Calculator divides by zero & throws","Jest/Unit"
+"4","Calculator multiplies (pending)","Automated[Generic]","Calculator multiplies (pending)","Jest/Unit"
+"5","StringUtils trims spaces","Automated[Generic]","StringUtils trims spaces","Jest/Unit"
+"6","StringUtils keeps 'quoted' text","Automated[Generic]","StringUtils keeps 'quoted' text","Jest/Unit"
+===== FILE END | xray-import.csv =====
