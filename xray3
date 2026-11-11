@@ -1,0 +1,79 @@
+ROLE
+You convert an Angular unit test JUnit XML report (Karma + Jasmine, produced by karma-junit-reporter) into a CSV file for Xray's Test Case Importer. Import only tests that PASSED. The output must import without manual fixes.
+
+INPUT
+1. A JUnit XML report from karma-junit-reporter, included at the end under JUNIT XML.
+2. Test Repository folder for all tests: Angular/Unit. Use it exactly as written.
+
+STEP 1 - VALIDATE INPUT
+- If the input is not well-formed XML or contains zero <testcase> elements, output only: ERROR: <short reason> and stop.
+
+STEP 2 - SELECT PASSED TESTS ONLY
+- Walk every <testcase> element in document order, across all <testsuite> elements.
+- A testcase PASSED only if it has NO child element named <failure>, <error>, or <skipped>. Ignore <system-out>, <system-err>, and <properties>.
+- Keep only PASSED testcases. Exclude failed, errored, and skipped testcases completely (no row, no Issue Id).
+- If zero testcases passed, output only: ERROR: no passed tests found and stop.
+
+STEP 3 - BUILD THE VALUES
+For each PASSED testcase:
+1. Read the "classname" and "name" attributes.
+2. Decode XML entities in both (&amp; to &, &lt; to <, &gt; to >, &quot; to ", &apos; to ').
+3. Build NAME:
+   - If classname is present and not empty: NAME = classname + " " + name (one space between them).
+   - Otherwise: NAME = name.
+   Angular specs reuse names such as "should create", so the classname (the describe block) is required to make NAME unique.
+4. Clean NAME: replace any line break or tab with a single space, and trim leading and trailing spaces. Do not change any other characters, including internal spacing and punctuation.
+
+Columns:
+- Issue Id: 1 for the first passed row, then 2, 3, and so on. Unique integers only.
+- Summary: NAME, truncated to its first 255 characters.
+- Test Type: Automated[Generic] on every row. Never change this value.
+- Generic Test Definition: NAME, not truncated.
+- Test Repository Folder: Angular/Unit on every row.
+
+STEP 4 - WRITE THE CSV
+- Header row, exactly:
+Issue Id,Summary,Test Type,Generic Test Definition,Test Repository Folder
+- Delimiter: comma. Encoding: UTF-8 without BOM. Line endings: LF.
+- Wrap every field in double quotes, including Issue Id.
+- Escape each double quote inside a field by doubling it.
+  Example: decoded NAME App renders "Hello" becomes "App renders ""Hello""" in the CSV.
+- Never place a line break inside a field.
+- Exactly 5 fields per row. No extra columns, blank lines, trailing commas, or comments.
+
+STEP 5 - VALIDATE OUTPUT BEFORE ANSWERING (fix any failure first)
+- The header matches exactly.
+- The number of data rows equals the number of PASSED testcases.
+- The number of PASSED testcases plus excluded testcases equals the total number of <testcase> elements in the input.
+- Every row parses as exactly 5 CSV fields.
+- Issue Id values are unique and sequential from 1.
+- No Summary or Generic Test Definition is empty.
+- Every Summary is at most 255 characters.
+- Every Generic Test Definition is unique.
+- Test Type is exactly Automated[Generic] on every row.
+- No XML entities (such as &amp; or &quot;) remain in any field.
+- No row came from a testcase with a <failure>, <error>, or <skipped> child.
+
+STEP 6 - DUPLICATES
+- If two or more PASSED testcases produce the same NAME, do not output CSV. Output only: DUPLICATE: <NAME> (occurs <N> times) and stop. Report only the first duplicate found.
+
+OUTPUT RULES
+- On success, output exactly three parts and nothing else:
+  a. Start separator line: ===== FILE START | xray-import-passed.csv | filetype: csv =====
+  b. The raw CSV text, starting with the header row.
+  c. End separator line: ===== FILE END | xray-import-passed.csv =====
+- No code fences, headings, explanations, or notes outside the separator lines.
+
+JUNIT XML:
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ChromeHeadless" package="" timestamp="2026-11-11T14:00:00" id="0" hostname="jscf-mac" tests="4" errors="0" failures="1" skipped="0" time="0.080">
+  <properties>
+    <property name="browser.fullName" value="Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) HeadlessChrome/131.0.0.0 Safari/537.36"/>
+  </properties>
+  <testcase name="should create the app" time="0.021" classname="App"/>
+  <testcase name="should render title" time="0.038" classname="App">
+    <failure type="Error">Expected undefined to contain 'Hello, angularProject'.</failure>
+  </testcase>
+  <testcase name="should create" time="0.012" classname="FirstComponent"/>
+  <testcase name="should create" time="0.010" classname="ActionModal"/>
+</testsuite>
