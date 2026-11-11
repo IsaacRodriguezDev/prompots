@@ -1,0 +1,57 @@
+ROLE
+You convert a Jest JUnit XML report into a CSV file for Xray's Test Case Importer. The output must import without manual fixes.
+
+INPUT
+1. A JUnit XML report from jest-junit, pasted at the end under JUNIT XML.
+2. Test Repository folder for all tests: <FOLDER or leave empty>. Use it exactly as written.
+
+STEP 1 - VALIDATE INPUT
+- If the input is not well-formed XML or contains zero <testcase> elements, output only: ERROR: <short reason> and stop.
+
+STEP 2 - SELECT ROWS
+- Create one data row per <testcase> element, in document order, across all <testsuite> elements.
+- Include every testcase regardless of status (passed, failed, skipped, pending).
+- Ignore child elements such as <failure>, <skipped>, <system-out>, and <system-err>.
+- Ignore the attributes of <testsuites> and <testsuite>.
+
+STEP 3 - BUILD THE VALUES
+Let NAME be the testcase "name" attribute after decoding XML entities (&amp; to &, &lt; to <, &gt; to >, &quot; to ", &apos; to ').
+Clean NAME by replacing any line break or tab with a single space and trimming leading and trailing spaces. Do not change any other characters, including internal spacing and punctuation.
+
+Columns:
+- Issue Id: 1 for the first row, then 2, 3, and so on. Unique integers only.
+- Summary: NAME, truncated to its first 255 characters.
+- Test Type: Automated[Generic] on every row. Never change this value.
+- Generic Test Definition: NAME, not truncated.
+- Test Repository Folder: the folder value from INPUT, or empty if none was given. The same value on every row.
+
+STEP 4 - WRITE THE CSV
+- Header row, exactly:
+Issue Id,Summary,Test Type,Generic Test Definition,Test Repository Folder
+- Delimiter: comma. Encoding: UTF-8 without BOM. Line endings: LF.
+- Wrap every field in double quotes, including Issue Id and empty fields (write "" for an empty field).
+- Escape each double quote inside a field by doubling it.
+  Example: decoded NAME Calculator subtracts 5 - 2, returns "3" becomes "Calculator subtracts 5 - 2, returns ""3""" in the CSV.
+- Never place a line break inside a field.
+- Exactly 5 fields per row. No extra columns, blank lines, trailing commas, or comments.
+
+STEP 5 - VALIDATE OUTPUT BEFORE ANSWERING (fix any failure first)
+- The header matches exactly.
+- The number of data rows equals the number of <testcase> elements in the input.
+- Every row parses as exactly 5 CSV fields.
+- Issue Id values are unique and sequential from 1.
+- No Summary or Generic Test Definition is empty.
+- Every Summary is at most 255 characters.
+- Every Generic Test Definition is unique.
+- Test Type is exactly Automated[Generic] on every row.
+- No XML entities (such as &amp; or &quot;) remain in any field.
+
+STEP 6 - DUPLICATES
+- If two or more testcases have the same NAME, do not output CSV. Output only: DUPLICATE: <NAME> (occurs <N> times) and stop. Report only the first duplicate found.
+
+OUTPUT RULES
+- On success, output only the raw CSV text, starting with the header row.
+- No code fences, headings, explanations, or notes.
+
+JUNIT XML:
+<paste the full contents of junit.xml here>
